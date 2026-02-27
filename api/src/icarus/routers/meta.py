@@ -6,6 +6,7 @@ from neo4j import AsyncSession
 
 from icarus.dependencies import get_session
 from icarus.services.neo4j_service import execute_query_single
+from icarus.services.source_registry import load_source_registry, source_registry_summary
 
 router = APIRouter(prefix="/api/v1/meta", tags=["meta"])
 
@@ -33,6 +34,9 @@ async def database_stats(
         return _stats_cache
 
     record = await execute_query_single(session, "meta_stats", {})
+    source_entries = load_source_registry()
+    source_summary = source_registry_summary(source_entries)
+
     result = {
         "total_nodes": record["total_nodes"] if record else 0,
         "total_relationships": record["total_relationships"] if record else 0,
@@ -77,7 +81,12 @@ async def database_stats(
         "municipal_bid_count": record["municipal_bid_count"] if record else 0,
         "municipal_contract_count": record["municipal_contract_count"] if record else 0,
         "municipal_gazette_act_count": record["municipal_gazette_act_count"] if record else 0,
-        "data_sources": 45,
+        "data_sources": source_summary["universe_v1_sources"],
+        "implemented_sources": source_summary["implemented_sources"],
+        "loaded_sources": source_summary["loaded_sources"],
+        "stale_sources": source_summary["stale_sources"],
+        "blocked_external_sources": source_summary["blocked_external_sources"],
+        "quality_fail_sources": source_summary["quality_fail_sources"],
     }
 
     _stats_cache = result
@@ -86,77 +95,6 @@ async def database_stats(
 
 
 @router.get("/sources")
-async def list_sources() -> dict[str, list[dict[str, str]]]:
-    return {
-        "sources": [
-            {"id": "cnpj", "name": "Receita Federal (CNPJ)", "frequency": "monthly"},
-            {"id": "tse", "name": "Tribunal Superior Eleitoral", "frequency": "biennial"},
-            {"id": "transparencia", "name": "Portal da Transparência", "frequency": "monthly"},
-            {"id": "ceis", "name": "CEIS/CNEP/CEPIM/CEAF", "frequency": "monthly"},
-            {"id": "cnes", "name": "CNES/DATASUS", "frequency": "monthly"},
-            {"id": "bndes", "name": "BNDES (Empréstimos)", "frequency": "monthly"},
-            {"id": "pgfn", "name": "PGFN (Dívida Ativa)", "frequency": "monthly"},
-            {"id": "ibama", "name": "IBAMA (Embargos)", "frequency": "monthly"},
-            {"id": "comprasnet", "name": "ComprasNet/PNCP", "frequency": "monthly"},
-            {"id": "tcu", "name": "TCU (Sanções)", "frequency": "monthly"},
-            {"id": "transferegov", "name": "TransfereGov (Convênios)", "frequency": "monthly"},
-            {"id": "rais", "name": "RAIS (Estatísticas Trabalhistas)", "frequency": "annual"},
-            {"id": "inep", "name": "INEP (Censo Educação)", "frequency": "annual"},
-            {"id": "dou", "name": "Diário Oficial da União", "frequency": "daily"},
-            {"id": "icij", "name": "ICIJ Offshore Leaks", "frequency": "yearly"},
-            {"id": "opensanctions", "name": "OpenSanctions (PEPs globais)", "frequency": "monthly"},
-            {"id": "cvm", "name": "CVM (Processos Sancionadores)", "frequency": "monthly"},
-            {"id": "camara", "name": "Câmara dos Deputados (CEAP)", "frequency": "monthly"},
-            {"id": "senado", "name": "Senado Federal (CEAPS)", "frequency": "monthly"},
-            {"id": "pep_cgu", "name": "CGU PEP (Pessoas Expostas)", "frequency": "monthly"},
-            {"id": "ceaf", "name": "CEAF (Servidores Expulsos)", "frequency": "monthly"},
-            {"id": "leniency", "name": "Acordos de Leniência", "frequency": "monthly"},
-            {"id": "ofac", "name": "OFAC SDN (Sanções Internacionais)", "frequency": "monthly"},
-            {"id": "holdings", "name": "Brasil.IO (Holdings Empresariais)", "frequency": "monthly"},
-            {"id": "cpgf", "name": "CPGF (Cartão de Pagamento)", "frequency": "monthly"},
-            {"id": "viagens", "name": "Viagens a Serviço", "frequency": "monthly"},
-            {"id": "siop", "name": "SIOP (Emendas Parlamentares)", "frequency": "annual"},
-            {"id": "pncp", "name": "PNCP (Licitações)", "frequency": "monthly"},
-            {"id": "cvm_funds", "name": "CVM (Fundos de Investimento)", "frequency": "monthly"},
-            {"id": "renuncias", "name": "Renúncias Fiscais", "frequency": "annual"},
-            {"id": "siconfi", "name": "SICONFI (Finanças Municipais)", "frequency": "annual"},
-            {"id": "tse_bens", "name": "TSE Bens Declarados", "frequency": "biennial"},
-            {"id": "tse_filiados", "name": "TSE Filiação Partidária", "frequency": "monthly"},
-            {"id": "cepim", "name": "CEPIM (ONGs Impedidas)", "frequency": "monthly"},
-            {"id": "bcb", "name": "BCB (Penalidades Bancárias)", "frequency": "monthly"},
-            {"id": "caged", "name": "CAGED (Movimentações Trabalhistas)", "frequency": "monthly"},
-            {"id": "stf", "name": "STF (Decisões Corte Aberta)", "frequency": "monthly"},
-            {"id": "eu_sanctions", "name": "EU (Sanções Europeias)", "frequency": "monthly"},
-            {
-                "id": "un_sanctions",
-                "name": "ONU (Sanções do Conselho de Segurança)",
-                "frequency": "monthly",
-            },
-            {
-                "id": "world_bank",
-                "name": "Banco Mundial (Firmas Impedidas)",
-                "frequency": "monthly",
-            },
-            {"id": "senado_cpis", "name": "Senado CPIs", "frequency": "yearly"},
-            {
-                "id": "camara_inquiries",
-                "name": "Câmara (CPIs/CPMIs e Requerimentos)",
-                "frequency": "daily",
-            },
-            {
-                "id": "mides",
-                "name": "MiDES (Licitações/Contratos Municipais)",
-                "frequency": "daily",
-            },
-            {
-                "id": "querido_diario",
-                "name": "Querido Diário (Atos Municipais)",
-                "frequency": "daily",
-            },
-            {
-                "id": "datajud",
-                "name": "CNJ DataJud (Processos Judiciais)",
-                "frequency": "monthly",
-            },
-        ]
-    }
+async def list_sources() -> dict[str, list[dict[str, Any]]]:
+    sources = [entry.to_public_dict() for entry in load_source_registry() if entry.in_universe_v1]
+    return {"sources": sources}

@@ -49,6 +49,7 @@ htmlcov/
 
 # Data files (too large for git)
 *.csv
+!docs/source_registry_br_v1.csv
 *.tsv
 *.parquet
 *.dbc

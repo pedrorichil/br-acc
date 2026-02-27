@@ -17,7 +17,7 @@ async def test_meta_sources(client: AsyncClient) -> None:
     assert response.status_code == 200
     data = response.json()
     assert "sources" in data
-    assert len(data["sources"]) == 45
+    assert len(data["sources"]) == 108
     source_ids = [s["id"] for s in data["sources"]]
     assert "cnpj" in source_ids
     assert "tse" in source_ids
@@ -61,6 +61,11 @@ async def test_meta_sources(client: AsyncClient) -> None:
     assert "mides" in source_ids
     assert "querido_diario" in source_ids
     assert "datajud" in source_ids
+    first = data["sources"][0]
+    assert "status" in first
+    assert "implementation_state" in first
+    assert "load_state" in first
+    assert "in_universe_v1" in first
 
 
 @pytest.mark.anyio
@@ -169,4 +174,9 @@ async def test_meta_stats(client: AsyncClient) -> None:
     assert data["municipal_bid_count"] == 8_000_000
     assert data["municipal_contract_count"] == 6_000_000
     assert data["municipal_gazette_act_count"] == 4_000_000
-    assert data["data_sources"] == 45
+    assert data["data_sources"] == 108
+    assert data["implemented_sources"] == 45
+    assert data["loaded_sources"] >= 1
+    assert data["stale_sources"] >= 0
+    assert data["blocked_external_sources"] >= 0
+    assert data["quality_fail_sources"] >= 0
