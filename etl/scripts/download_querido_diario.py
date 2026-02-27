@@ -47,6 +47,9 @@ def _iter_pages(
             break
 
         results = payload.get("results")
+        if not isinstance(results, list):
+            # Current API shape uses "gazettes".
+            results = payload.get("gazettes")
         if not isinstance(results, list) or not results:
             break
 
@@ -56,7 +59,8 @@ def _iter_pages(
 
         next_page = payload.get("next")
         logger.info("Querido Diário page=%d rows=%d", page, len(results))
-        if not next_page:
+        # Some responses do not include "next"; fallback to page-size heuristic.
+        if not next_page and len(results) < 100:
             break
         page += 1
 
@@ -93,16 +97,35 @@ def main(
 
     with acts_file.open("w", encoding="utf-8") as f:
         for row in rows:
+            excerpts = row.get("excerpts", [])
+            excerpt_text = ""
+            if isinstance(excerpts, list):
+                parts: list[str] = []
+                for item in excerpts:
+                    if isinstance(item, str):
+                        parts.append(item)
+                    elif isinstance(item, dict):
+                        # Querido Diário may expose excerpt chunks under text/content fields.
+                        parts.append(
+                            str(
+                                item.get("text")
+                                or item.get("content")
+                                or item.get("excerpt")
+                                or "",
+                            ),
+                        )
+                excerpt_text = " ".join(p for p in parts if p).strip()
+
             mapped = {
                 "act_id": str(row.get("id", "")),
                 "municipality_name": str(row.get("territory_name", "")),
                 "municipality_code": str(row.get("territory_id", "")),
                 "uf": str(row.get("state_code", "")),
                 "date": str(row.get("date", ""))[:10],
-                "title": str(row.get("headline", "")),
-                "text": str(row.get("excerpt", "")),
-                "source_url": str(row.get("url", "")),
-                "edition": str(row.get("edition", "")),
+                "title": str(row.get("headline") or row.get("territory_name") or ""),
+                "text": str(row.get("excerpt") or excerpt_text or ""),
+                "source_url": str(row.get("url") or row.get("txt_url") or ""),
+                "edition": str(row.get("edition") or row.get("is_extra_edition") or ""),
             }
             f.write(json.dumps(mapped, ensure_ascii=False) + "\n")
 

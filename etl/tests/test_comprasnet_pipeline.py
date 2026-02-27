@@ -92,7 +92,7 @@ def test_transform_sets_source() -> None:
     pipeline.transform()
 
     for c in pipeline.contracts:
-        assert c["source"] == "pncp"
+        assert c["source"] == "comprasnet"
 
 
 def test_transform_contract_ids_are_unique() -> None:
@@ -124,6 +124,36 @@ def test_transform_extracts_dates() -> None:
     assert "2024-01-15" in dates
     assert "2024-03-01" in dates
     assert "2024-02-15" in dates
+
+
+def test_transform_sanitizes_absurd_future_date() -> None:
+    pipeline = _make_pipeline()
+    _extract_from_fixtures(pipeline)
+
+    pipeline._raw_records.append({
+        "numeroControlePNCP": "00600371000104-2-000035/2024",
+        "niFornecedor": "00600371000104",
+        "tipoPessoa": "PJ",
+        "nomeRazaoSocialFornecedor": "FORNECEDOR FUTURO LTDA",
+        "objetoContrato": "OBJETO TESTE",
+        "valorGlobal": 1000.0,
+        "dataAssinatura": "2102-09-24",
+        "dataVigenciaFim": "2103-01-01",
+        "orgaoEntidade": {
+            "cnpj": "00394445000166",
+            "razaoSocial": "CAMARA MUNICIPAL DE CORDEIROPOLIS",
+        },
+        "tipoContrato": {"id": 1, "nome": "Empenho"},
+        "anoContrato": 2024,
+        "sequencialContrato": 35,
+    })
+
+    pipeline.transform()
+    target = next(
+        c for c in pipeline.contracts if c["contract_id"] == "00600371000104-2-000035/2024"
+    )
+    assert target["date"] == ""
+    assert target["date_end"] == ""
 
 
 def test_transform_limit() -> None:

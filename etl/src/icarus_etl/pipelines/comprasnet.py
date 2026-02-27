@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import json
 import logging
+import re
+from datetime import date, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -27,6 +29,23 @@ if TYPE_CHECKING:
     from neo4j import Driver
 
 logger = logging.getLogger(__name__)
+
+_ISO_DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
+_MAX_FUTURE_DAYS = 365
+
+
+def _sanitize_iso_date(raw_value: str) -> str:
+    """Return ISO date if valid and not absurdly in the future, else empty."""
+    candidate = raw_value.strip()[:10]
+    if not _ISO_DATE_RE.fullmatch(candidate):
+        return ""
+    try:
+        parsed = date.fromisoformat(candidate)
+    except ValueError:
+        return ""
+    if parsed > date.today() + timedelta(days=_MAX_FUTURE_DAYS):
+        return ""
+    return candidate
 
 # Map PNCP modalidade IDs to short labels
 _MODALIDADE_MAP: dict[int, str] = {
@@ -123,8 +142,8 @@ class ComprasnetPipeline(Pipeline):
             tipo_nome = str(tipo_contrato.get("nome", "")) if tipo_contrato else ""
 
             # Dates
-            data_assinatura = str(rec.get("dataAssinatura", "")).strip()
-            data_fim = str(rec.get("dataVigenciaFim", "")).strip()
+            data_assinatura = _sanitize_iso_date(str(rec.get("dataAssinatura", "")))
+            data_fim = _sanitize_iso_date(str(rec.get("dataVigenciaFim", "")))
 
             # Supplier name
             razao_social = normalize_name(
@@ -138,12 +157,12 @@ class ComprasnetPipeline(Pipeline):
                 ),
                 "value": cap_contract_value(float(valor)),
                 "contracting_org": org_name,
-                "date": data_assinatura[:10] if data_assinatura else "",
-                "date_end": data_fim[:10] if data_fim else "",
+                "date": data_assinatura,
+                "date_end": data_fim,
                 "cnpj": cnpj,
                 "razao_social": razao_social,
                 "tipo_contrato": tipo_nome,
-                "source": "pncp",
+                "source": "comprasnet",
             })
 
         self.contracts = deduplicate_rows(contracts, ["contract_id"])

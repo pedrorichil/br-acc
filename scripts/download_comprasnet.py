@@ -22,7 +22,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://pncp.gov.br/api/consulta/v1/contratos"
-PAGE_SIZE = 500
+# Smaller page size avoids oversized responses/timeouts on PNCP contracts API.
+PAGE_SIZE = 100
 OUTPUT_DIR = Path(__file__).resolve().parent.parent / "data" / "comprasnet"
 
 
@@ -41,7 +42,7 @@ def fetch_page(
     }
     for attempt in range(retries):
         try:
-            resp = requests.get(BASE_URL, params=params, timeout=60)
+            resp = requests.get(BASE_URL, params=params, timeout=(20, 30))
             resp.raise_for_status()
             return resp.json()
         except (requests.RequestException, json.JSONDecodeError) as exc:
@@ -58,10 +59,6 @@ def fetch_page(
 def download_month(year: int, month: int) -> list[dict]:
     """Download all contracts for a given month."""
     # Calculate last day of month
-    if month == 12:
-        next_month_start = f"{year + 1}0101"
-    else:
-        next_month_start = f"{year}{month + 1:02d}01"
     from datetime import date, timedelta
 
     last_day = (
@@ -95,7 +92,7 @@ def download_month(year: int, month: int) -> list[dict]:
     all_records = list(first.get("data", []))
 
     for page in range(2, total_pages + 1):
-        if page % 50 == 0:
+        if page % 10 == 0:
             logger.info("  Page %d/%d...", page, total_pages)
         data = fetch_page(date_start, date_end, page)
         all_records.extend(data.get("data", []))

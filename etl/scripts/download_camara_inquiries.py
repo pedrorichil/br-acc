@@ -26,8 +26,12 @@ def _request_json(
     client: httpx.Client,
     url: str,
     params: dict[str, Any] | None = None,
+    tolerated_statuses: set[int] | None = None,
 ) -> dict[str, Any]:
     response = client.get(url, params=params, timeout=60)
+    if tolerated_statuses and response.status_code in tolerated_statuses:
+        logger.warning("Endpoint returned %d for %s", response.status_code, response.url)
+        return {}
     response.raise_for_status()
     payload = response.json()
     if isinstance(payload, dict):
@@ -165,8 +169,19 @@ def main(output_dir: str, skip_existing: bool) -> None:
                 client,
                 f"{CAMARA_BASE_URL}/orgaos/{orgao_id}/proposicoes",
                 {"itens": 200},
+                tolerated_statuses={404, 405},
             )
-            for prop in _extract_items(proposicoes_payload):
+            proposicoes = _extract_items(proposicoes_payload)
+            if not proposicoes:
+                fallback_payload = _request_json(
+                    client,
+                    f"{CAMARA_BASE_URL}/proposicoes",
+                    {"idOrgao": orgao_id, "itens": 200},
+                    tolerated_statuses={400, 404, 405},
+                )
+                proposicoes = _extract_items(fallback_payload)
+
+            for prop in proposicoes:
                 prop_id = str(prop.get("id", "")).strip()
                 if not prop_id:
                     continue
